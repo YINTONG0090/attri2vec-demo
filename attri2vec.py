@@ -1,5 +1,5 @@
 
-# verify that we're using the correct version of StellarGraph for this notebook
+##### verify that we're using the correct version of StellarGraph for this notebook
 import stellargraph as sg
 
 try:
@@ -26,56 +26,47 @@ from tensorflow import keras
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import roc_auc_score
 
-
-#加载网络数据
+#####input data
 filename1=r'C:\Users\殷彤\Desktop\柴山老师\id_pair.csv'
 filename2=r'C:\Users\殷彤\Desktop\柴山老师\id_vector.csv'
-test1=r'C:\Users\殷彤\Desktop\柴山老师\content.txt'
-test2=r'C:\Users\殷彤\Desktop\柴山老师\edgeList.txt'
 
-#导入连接集
+node_data = pd.read_csv(filename2)
+node=pd.DataFrame(node_data)
 edgelist = pd.read_csv(filename1)
 edgelist.rename(columns={'id1':'source','id2':'target'},inplace=True)
 edgelist["label"] = "cites"  # set the edge type
 
-
-#设置名称
+#Set the feature name
 feature_names =['None']+["w_{}".format(ii) for ii in range(200)]+['None'] #w_200
 feature_names2=["w_{}".format(ii) for ii in range(200)]
 node_column_names = ["id"]+feature_names 
 
-#导入点集，并把特征向量拆为单列
-node_data = pd.read_csv(filename2)
-node=pd.DataFrame(node_data)
-node.index.values #index正确
-split=node['vector'].str.split(',|\[|\]',expand=True) #按逗号和[]分割向量
+#Split the vector into columns
+split=node['vector'].str.split(',|\[|\]',expand=True) #split
 split.columns=feature_names
-split=split.drop(['None'],axis=1) #将空行删掉
+split=split.drop(['None'],axis=1) #delet ' '
 node_feature1=split 
-node_feature1.index.values #无index
 node_all=node.join(split)
 node_all=node_all.drop(['vector'],axis=1)
 
-#bulid network
+#####bulid network by networkX
 G_all_nx = nx.from_pandas_edgelist(edgelist, edge_attr="label")
 print(nx.info(G_all_nx))
 
 nx.set_node_attributes(G_all_nx,'paper','label')
-#G_all_nx.nodes[53803875]['label']
 
+#select the nodes needed to build the network in node_real set
 node_real=pd.DataFrame(data=G_all_nx.nodes)
-
-#nodes集中有的点未使用，将其剔除,设置为node_real
 node_real.columns=['id']
-node_real2=node_all[node_all['id'].isin(node_real['id'])] #nodes集中网络中的点
-node_real3=node_real2.set_index(["id"],inplace=False)#需在nodes集中设置id为index
+node_real2=node_all[node_all['id'].isin(node_real['id'])] 
+node_real3=node_real2.set_index(["id"],inplace=False)#Set the 'id' to Index(important)
 
+#Convert the network built by NetworkX into a Stellargraph form
 G_all = sg.StellarGraph.from_networkx(G_all_nx, node_features=node_real3)
-
 print(G_all.info())
 
-#构建子图
-subgraph_edgelist = edgelist.loc[:765303,['source','target']] #取前80%的边构造子网络
+#####Build a subnetwork
+subgraph_edgelist = edgelist.loc[:765303,['source','target']] #Use the first 80% of links to build the subnetwork
 subgraph_edgelist["label"]="cites"
 
 G_sub_nx = nx.from_pandas_edgelist(subgraph_edgelist, edge_attr="label")
@@ -90,7 +81,7 @@ G_sub = sg.StellarGraph.from_networkx(G_sub_nx, node_features=subgraph_node_feat
 
 print(G_sub.info())
 
-#在子图上训练attri2vec
+#####Train the attri2vec model in the subnetwork  
 nodes=list(G_sub.nodes())
 number_of_walks=2
 length=5
@@ -131,20 +122,7 @@ history = model.fit(
     shuffle=True,
 )
 
-#预测节点
-x_inp_src = x_inp[0]
-x_out_src = x_out[0]
-embedding_model = keras.Model(inputs=x_inp_src, outputs=x_out_src)
-
-node_ids = node_real3.index
-node_gen = Attri2VecNodeGenerator(G_all, batch_size).flow(node_ids)
-node_embeddings = embedding_model.predict(node_gen, workers=4, verbose=1)
-
-#获取样本内外连接
-no_subgraph_edgelist = edgelist.loc[765304:,['source','target']] #取后20%的边
-
-in_sample_edges = []
-out_of_sample_edges = []
+#####prediction
 
 
 
